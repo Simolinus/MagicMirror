@@ -87,8 +87,8 @@ var config = {
 			config: {
 				feeds: [
 					{
-						title: "Iltasanomat",
-						url: "https://www.is.fi/rss/kotimaa.xml"
+						title: "Svenska Yle",
+						url: "https://svenska.yle.fi/nyheter/senaste-nytt.rss"
 					}
 				],
 				showSourceTitle: true,
