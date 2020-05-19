@@ -12,25 +12,25 @@ Module.register("compliments", {
 	defaults: {
 		compliments: {
 			anytime: [
-				"Hey there sexy!"
+				""
 			],
 			morning: [
-				"Good morning, handsome!",
-				"Enjoy your day!",
-				"How was your sleep?"
+				"We're no strangers to love",
+				"You know the rules and so do I",
+				"A full commitments what I'm looking for"
 			],
 			afternoon: [
-				"Hello, beauty!",
-				"You look sexy!",
-				"Looking good today!"
+				"You wouldn't get this from any other guy",
+				"Gotta make you understand",
+				"Never gonna give you up",
 			],
 			evening: [
-				"Wow, you look hot!",
-				"You look nice!",
-				"Hi, sexy!"
+				"Never gonna let you down",
+				"Never gonna run around and desert you",
+				"Never gonna make you cry"
 			],
 			"....-01-01": [
-				"Happy new year!"
+				"Glatt nytt år"
 			]
 		},
 		updateInterval: 30000,
