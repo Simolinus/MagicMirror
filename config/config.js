@@ -49,11 +49,9 @@ var config = {
 		{
 			module: "googlecalendar",
 			position: "top_left",   // This can be any of the regions.
-			header: "Upcomming Events",
+			header: "Upkommande evenemang",
 			config: {
-				// The config property is optional.
-				// If no config is set, an example calendar is shown.
-				// See 'Configuration options' for more information.
+				maximumEntries: 10
 			}
 		},
 		{
@@ -63,7 +61,7 @@ var config = {
 		{
 			module: "mm-hsl-timetable",
 			position: "top_right",
-			header: "Bus schedule",
+			header: "Bus tidtabell",
 			config: {
 				stops: [1383134],
 				busCount: 5
@@ -81,7 +79,7 @@ var config = {
 		{
 			module: "weatherforecast",
 			position: "top_right",
-			header: "Weather Forecast",
+			header: "Väderprognos",
 			config: {
 				location: "Helsinki",
 				locationID: "658225", //ID from http://bulk.openweathermap.org/sample/city.list.json.gz; unzip the gz file and find your city
