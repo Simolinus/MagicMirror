@@ -12,22 +12,22 @@ Module.register("compliments", {
 	defaults: {
 		compliments: {
 			anytime: [
-				"There's always bigger fish"
+				"There's always bigger fish",
 			],
 			morning: [
-				"We're no strangers to love",
-				"You know the rules and so do I",
-				"A full commitments what I'm looking for"
+				"God morgon",
+				"I don't care what universe you're from, thats got to hurt",
+				"Are you an angel?",
 			],
 			afternoon: [
-				"You wouldn't get this from any other guy",
-				"Gotta make you understand",
-				"Never gonna give you up",
+				"God eftermiddag",
+				"It ought to be here...But it isn't...",
+				"I don't like sand. It's coarse and rough and irritating. And it gets everywhere",
 			],
 			evening: [
-				"Never gonna let you down",
-				"Never gonna run around and desert you",
-				"Never gonna make you cry"
+				"God kväll",
+				"I am the senate",
+				"Belive me, I wish I could just... Wish away my feelings",
 			],
 			"....-01-01": [
 				"Glatt nytt år"
