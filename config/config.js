@@ -25,7 +25,7 @@ var config = {
 	httpsPrivateKey: "", 	// HTTPS private key path, only require when useHttps is true
 	httpsCertificate: "", 	// HTTPS Certificate path, only require when useHttps is true
 
-	language: "en",
+	language: "sv",
 	timeFormat: 24,
 	units: "metric",
 	// serverOnly:  true/false/"local" ,
@@ -47,20 +47,27 @@ var config = {
 			position: "top_left"
 		},
 		{
-			module: "calendar",
-			header: "US Holidays",
-			position: "top_left",
+			module: "googlecalendar",
+			position: "top_left",   // This can be any of the regions.
+			header: "Upcomming Events",
 			config: {
-				calendars: [
-					{
-						symbol: "calendar-check",
-						url: "webcal://www.calendarlabs.com/ical-calendar/ics/76/US_Holidays.ics"					}
-				]
+				// The config property is optional.
+				// If no config is set, an example calendar is shown.
+				// See 'Configuration options' for more information.
 			}
 		},
 		{
 			module: "compliments",
 			position: "lower_third"
+		},
+		{
+			module: "mm-hsl-timetable",
+			position: "top_right",
+			header: "Bus schedule",
+			config: {
+				stops: [1383134],
+				busCount: 5
+			}
 		},
 		{
 			module: "currentweather",
