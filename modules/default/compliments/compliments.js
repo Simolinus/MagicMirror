@@ -12,7 +12,7 @@ Module.register("compliments", {
 	defaults: {
 		compliments: {
 			anytime: [
-				""
+				"There's always bigger fish"
 			],
 			morning: [
 				"We're no strangers to love",
