@@ -15,22 +15,22 @@ Module.register("compliments", {
 				"There's always bigger fish",
 			],
 			morning: [
-				"God morgon",
+				"God morgon!",
 				"I don't care what universe you're from, thats got to hurt",
 				"Are you an angel?",
 			],
 			afternoon: [
-				"God eftermiddag",
+				"God eftermiddag!",
 				"It ought to be here...But it isn't...",
 				"I don't like sand. It's coarse and rough and irritating. And it gets everywhere",
 			],
 			evening: [
-				"God kväll",
+				"God kväll!",
 				"I am the senate",
 				"Belive me, I wish I could just... Wish away my feelings",
 			],
 			"....-01-01": [
-				"Glatt nytt år"
+				"Glatt nytt år!"
 			]
 		},
 		updateInterval: 30000,
