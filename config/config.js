@@ -48,7 +48,7 @@ var config = {
 		},
 		{
 			module: "googlecalendar",
-			position: "top_left",   // This can be any of the regions.
+			position: "top_center",   // This can be any of the regions.
 			header: "Upkommande evenemang",
 			config: {
 				maximumEntries: 10
@@ -60,7 +60,7 @@ var config = {
 		},
 		{
 			module: "mm-hsl-timetable",
-			position: "top_right",
+			position: "top_left",
 			header: "Bus tidtabell",
 			config: {
 				stops: [1383134],
