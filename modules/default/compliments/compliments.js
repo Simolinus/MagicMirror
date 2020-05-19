@@ -30,7 +30,7 @@ Module.register("compliments", {
 				"Belive me, I wish I could just... Wish away my feelings",
 			],
 			"....-01-01": [
-				"Glatt nytt år!"
+				"Gott nytt år!"
 			]
 		},
 		updateInterval: 30000,
