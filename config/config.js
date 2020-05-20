@@ -55,10 +55,6 @@ var config = {
 			}
 		},
 		{
-			module: "compliments",
-			position: "lower_third"
-		},
-		{
 			module: "mm-hsl-timetable",
 			position: "top_left",
 			header: "Bus tidtabell",
@@ -66,6 +62,33 @@ var config = {
 				stops: [1383134],
 				busCount: 5
 			}
+		},
+		{
+			module: "MMM-RTSPStream",
+			position: "middle_center",
+			header: "Frontdoor",
+				config: {
+				alarmStatusUrl: 'http://localhost:5000/frontdoorAlarm',
+				autoStart: false,
+				rotateStreams: true,
+				rotateStreamTimeout: 10,
+				moduleWidth: 992,
+				moduleHeight: 752,
+				localPlayer: 'omxplayer',
+				remotePlayer: 'none',
+				showSnapWhenPaused: false,
+				remoteSnaps: false,
+				stream1: {
+					name: 'Frontdoor',
+					url: 'rtsp://admin:essokatten75@192.168.1.113:88/videoMain',
+					frameRate: 'undefined',
+					width: 960,
+					height: 720,
+					ffmpegPort: 9999,
+					shutdownDelay: 10000,
+					hideFfmpegOutput: true,
+					},
+				}
 		},
 		{
 			module: "currentweather",
