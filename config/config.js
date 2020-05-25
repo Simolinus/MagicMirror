@@ -57,7 +57,7 @@ var config = {
 		{
 			module: "mm-hsl-timetable",
 			position: "top_left",
-			header: "Bus tidtabell",
+			header: "Busstidtabell",
 			config: {
 				stops: [1383134],
 				busCount: 5
