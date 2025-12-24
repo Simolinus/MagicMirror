@@ -1,55 +1,73 @@
-/* Simple JavaScript Inheritance
- * By John Resig http://ejohn.org/
+/* global Class, xyz */
+
+/*
+ * Simple JavaScript Inheritance
+ * By John Resig https://johnresig.com/
+ *
+ * Inspired by base2 and Prototype
+ *
  * MIT Licensed.
  */
-
-// Inspired by base2 and Prototype
 (function () {
-	var initializing = false;
-	var fnTest = /xyz/.test(function () { xyz; }) ? /\b_super\b/ : /.*/;
+	let initializing = false;
+	const fnTest = (/xyz/).test(function () {
+		xyz;
+	})
+		? /\b_super\b/
+		: /.*/;
 
 	// The base Class implementation (does nothing)
-	this.Class = function () { };
+	this.Class = function () {};
 
 	// Create a new Class that inherits from this class
 	Class.extend = function (prop) {
-		var _super = this.prototype;
+		let _super = this.prototype;
 
-		// Instantiate a base class (but only create the instance,
-		// don't run the init constructor)
+		/*
+		 * Instantiate a base class (but only create the instance,
+		 * don't run the init constructor)
+		 */
 		initializing = true;
-		var prototype = new this();
+		const prototype = new this();
 		initializing = false;
 
 		// Make a copy of all prototype properties, to prevent reference issues.
-		for (var name in prototype) {
-			prototype[name] = cloneObject(prototype[name]);
+		for (const p in prototype) {
+			prototype[p] = cloneObject(prototype[p]);
 		}
 
 		// Copy the properties over onto the new prototype
-		for (var name in prop) {
+		for (const name in prop) {
 			// Check if we're overwriting an existing function
-			prototype[name] = typeof prop[name] === "function" &&
-				typeof _super[name] === "function" && fnTest.test(prop[name]) ? (function (name, fn) {
-					return function () {
-						var tmp = this._super;
+			prototype[name]
+				= typeof prop[name] === "function" && typeof _super[name] === "function" && fnTest.test(prop[name])
+					? (function (name, fn) {
+						return function () {
+							const tmp = this._super;
 
-						// Add a new ._super() method that is the same method
-						// but on the super-class
-						this._super = _super[name];
+							/*
+							 * Add a new ._super() method that is the same method
+							 * but on the super-class
+							 */
+							this._super = _super[name];
 
-						// The method only need to be bound temporarily, so we
-						// remove it when we're done executing
-						var ret = fn.apply(this, arguments);
-						this._super = tmp;
+							/*
+							 * The method only need to be bound temporarily, so we
+							 * remove it when we're done executing
+							 */
+							const ret = fn.apply(this, arguments);
+							this._super = tmp;
 
-						return ret;
-					};
-				})(name, prop[name]) : prop[name];
+							return ret;
+						};
+					}(name, prop[name]))
+					: prop[name];
 		}
 
-		// The dummy class constructor
-		function Class() {
+		/**
+		 * The dummy class constructor
+		 */
+		function Class () {
 			// All construction is actually done in the init method
 			if (!initializing && this.init) {
 				this.init.apply(this, arguments);
@@ -67,17 +85,24 @@
 
 		return Class;
 	};
-})();
+}());
 
-//Define the clone method for later use.
-//Helper Method
-function cloneObject(obj) {
+/**
+ * Define the clone method for later use. Helper Method.
+ * @param {object} obj Object to be cloned
+ * @returns {object} the cloned object
+ */
+function cloneObject (obj) {
 	if (obj === null || typeof obj !== "object") {
 		return obj;
 	}
 
-	var temp = obj.constructor(); // give temp the original obj's constructor
-	for (var key in obj) {
+	if (obj.constructor.name === "RegExp") {
+		return new RegExp(obj);
+	}
+
+	const temp = obj.constructor(); // give temp the original obj's constructor
+	for (const key in obj) {
 		temp[key] = cloneObject(obj[key]);
 
 		if (key === "lockStrings") {

@@ -1,67 +1,27 @@
-const helpers = require("./global-setup");
-const request = require("request");
-const expect = require("chai").expect;
+const helpers = require("./helpers/global-setup");
 
-const describe = global.describe;
-const it = global.it;
-const beforeEach = global.beforeEach;
-const afterEach = global.afterEach;
-
-describe("Electron app environment", function() {
-	helpers.setupTimeout(this);
-
-	var app = null;
-
-	before(function() {
-		// Set config sample for use in test
-		process.env.MM_CONFIG_FILE = "tests/configs/env.js";
+describe("App environment", () => {
+	beforeAll(async () => {
+		await helpers.startApplication("tests/configs/default.js");
+		await helpers.getDocument();
+	});
+	afterAll(async () => {
+		await helpers.stopApplication();
 	});
 
-	beforeEach(function() {
-		return helpers
-			.startApplication({
-				args: ["js/electron.js"]
-			})
-			.then(function(startedApp) {
-				app = startedApp;
-			});
+	it("get request from http://localhost:8080 should return 200", async () => {
+		const res = await fetch("http://localhost:8080");
+		expect(res.status).toBe(200);
 	});
 
-	afterEach(function() {
-		return helpers.stopApplication(app);
+	it("get request from http://localhost:8080/nothing should return 404", async () => {
+		const res = await fetch("http://localhost:8080/nothing");
+		expect(res.status).toBe(404);
 	});
 
-	it("should open a browserwindow", function() {
-		return app.client
-			.waitUntilWindowLoaded()
-			// .browserWindow.focus()
-			.getWindowCount()
-			.should.eventually.equal(1)
-			.browserWindow.isMinimized()
-			.should.eventually.be.false.browserWindow.isDevToolsOpened()
-			.should.eventually.be.false.browserWindow.isVisible()
-			.should.eventually.be.true.browserWindow.isFocused()
-			.should.eventually.be.true.browserWindow.getBounds()
-			.should.eventually.have.property("width")
-			.and.be.above(0)
-			.browserWindow.getBounds()
-			.should.eventually.have.property("height")
-			.and.be.above(0)
-			.browserWindow.getTitle()
-			.should.eventually.equal("MagicMirror²");
-	});
-
-	it("get request from http://localhost:8080 should return 200", function(done) {
-		request.get("http://localhost:8080", function(err, res, body) {
-			expect(res.statusCode).to.equal(200);
-			done();
-		});
-	});
-
-	it("get request from http://localhost:8080/nothing should return 404", function(done) {
-		request.get("http://localhost:8080/nothing", function(err, res, body) {
-			expect(res.statusCode).to.equal(404);
-			done();
-		});
+	it("should show the title MagicMirror²", async () => {
+		const elem = await helpers.waitForElement("title");
+		expect(elem).not.toBeNull();
+		expect(elem.textContent).toBe("MagicMirror²");
 	});
 });

@@ -1,155 +1,142 @@
-/* global Module */
+/* global NotificationFx */
 
-/* Magic Mirror
- * Module: alert
- *
- * By Paul-Vincent Roll http://paulvincentroll.com
- * MIT Licensed.
- */
+Module.register("alert", {
+	alerts: {},
 
-Module.register("alert",{
 	defaults: {
-		// scale|slide|genie|jelly|flip|bouncyflip|exploader
-		effect: "slide",
-		// scale|slide|genie|jelly|flip|bouncyflip|exploader
-		alert_effect: "jelly",
-		//time a notification is displayed in seconds
-		display_time: 3500,
-		//Position
+		effect: "slide", // scale|slide|genie|jelly|flip|bouncyflip|exploader
+		alert_effect: "jelly", // scale|slide|genie|jelly|flip|bouncyflip|exploader
+		display_time: 3500, // time a notification is displayed in seconds
 		position: "center",
-		//shown at startup
-		welcome_message: false,
+		welcome_message: false // shown at startup
 	},
-	getScripts: function() {
-		return ["classie.js", "modernizr.custom.js", "notificationFx.js"];
+
+	getScripts () {
+		return ["notificationFx.js"];
 	},
-	getStyles: function() {
-		return ["ns-default.css", "font-awesome.css"];
+
+	getStyles () {
+		return ["font-awesome.css", this.file("./styles/notificationFx.css"), this.file(`./styles/${this.config.position}.css`)];
 	},
-	// Define required translations.
-	getTranslations: function() {
+
+	getTranslations () {
 		return {
-			en: "translations/en.json",
+			bg: "translations/bg.json",
+			da: "translations/da.json",
 			de: "translations/de.json",
+			en: "translations/en.json",
+			eo: "translations/eo.json",
+			es: "translations/es.json",
+			fr: "translations/fr.json",
+			hu: "translations/hu.json",
 			nl: "translations/nl.json",
+			ru: "translations/ru.json",
+			th: "translations/th.json"
 		};
 	},
-	show_notification: function(message) {
-		if (this.config.effect === "slide") {this.config.effect = this.config.effect + "-" + this.config.position;}
-		msg = "";
-		if (message.title) {
-			msg += "<span class='thin dimmed medium'>" + message.title + "</span>";
-		}
-		if (message.message){
-			if (msg !== ""){
-				msg+= "<br />";
-			}
-			msg += "<span class='light bright small'>" + message.message + "</span>";
-		}
 
-		new NotificationFx({
-			message: msg,
-			layout: "growl",
-			effect: this.config.effect,
-			ttl: message.timer !== undefined ? message.timer : this.config.display_time
-		}).show();
+	getTemplate (type) {
+		return `templates/${type}.njk`;
 	},
-	show_alert: function(params, sender) {
-		var self = this;
-		//Set standard params if not provided by module
-		if (typeof params.timer === "undefined") { params.timer = null; }
-		if (typeof params.imageHeight === "undefined") { params.imageHeight = "80px"; }
-		if (typeof params.imageUrl === "undefined" && typeof params.imageFA === "undefined") {
-			params.imageUrl = null;
-			image = "";
-		} else if (typeof params.imageFA === "undefined"){
-			image = "<img src='" + (params.imageUrl).toString() + "' height='" + (params.imageHeight).toString() + "' style='margin-bottom: 10px;'/><br />";
-		} else if (typeof params.imageUrl === "undefined"){
-			image = "<span class='bright " + "fa fa-" + params.imageFA + "' style='margin-bottom: 10px;font-size:" + (params.imageHeight).toString() + ";'/></span><br />";
-		}
-		//Create overlay
-		var overlay = document.createElement("div");
-		overlay.id = "overlay";
-		overlay.innerHTML += "<div class=\"black_overlay\"></div>";
-		document.body.insertBefore(overlay, document.body.firstChild);
 
-		//If module already has an open alert close it
-		if (this.alerts[sender.name]) {
-			this.hide_alert(sender);
+	async start () {
+		Log.info(`Starting module: ${this.name}`);
+
+		if (this.config.effect === "slide") {
+			this.config.effect = `${this.config.effect}-${this.config.position}`;
 		}
 
-		//Display title and message only if they are provided in notification parameters
-		var message = "";
-		if (params.title) {
-			message += "<span class='light dimmed medium'>" + params.title + "</span>";
-		}
-		if (params.message) {
-			if (message !== ""){
-				message += "<br />";
-			}
-
-			message += "<span class='thin bright small'>" + params.message + "</span>";
-		}
-
-		//Store alert in this.alerts
-		this.alerts[sender.name] = new NotificationFx({
-			message: image + message,
-			effect: this.config.alert_effect,
-			ttl: params.timer,
-			al_no: "ns-alert"
-		});
-		//Show alert
-		this.alerts[sender.name].show();
-		//Add timer to dismiss alert and overlay
-		if (params.timer) {
-			setTimeout(function() {
-				self.hide_alert(sender);
-			}, params.timer);
-		}
-
-	},
-	hide_alert: function(sender) {
-		//Dismiss alert and remove from this.alerts
-		if (this.alerts[sender.name]) {
-			this.alerts[sender.name].dismiss();
-			this.alerts[sender.name] = null;
-			//Remove overlay
-			var overlay = document.getElementById("overlay");
-			overlay.parentNode.removeChild(overlay);
+		if (this.config.welcome_message) {
+			const message = this.config.welcome_message === true ? this.translate("welcome") : this.config.welcome_message;
+			await this.showNotification({ title: this.translate("sysTitle"), message });
 		}
 	},
-	setPosition: function(pos) {
-		//Add css to body depending on the set position for notifications
-		var sheet = document.createElement("style");
-		if (pos === "center") {sheet.innerHTML = ".ns-box {margin-left: auto; margin-right: auto;text-align: center;}";}
-		if (pos === "right") {sheet.innerHTML = ".ns-box {margin-left: auto;text-align: right;}";}
-		if (pos === "left") {sheet.innerHTML = ".ns-box {margin-right: auto;text-align: left;}";}
-		document.body.appendChild(sheet);
 
-	},
-	notificationReceived: function(notification, payload, sender) {
+	notificationReceived (notification, payload, sender) {
 		if (notification === "SHOW_ALERT") {
-			if (typeof payload.type === "undefined") { payload.type = "alert"; }
-			if (payload.type === "alert") {
-				this.show_alert(payload, sender);
-			} else if (payload.type === "notification") {
-				this.show_notification(payload);
+			if (payload.type === "notification") {
+				this.showNotification(payload);
+			} else {
+				this.showAlert(payload, sender);
 			}
 		} else if (notification === "HIDE_ALERT") {
-			this.hide_alert(sender);
+			this.hideAlert(sender);
 		}
 	},
-	start: function() {
-		this.alerts = {};
-		this.setPosition(this.config.position);
-		if (this.config.welcome_message) {
-			if (this.config.welcome_message === true){
-				this.show_notification({title: this.translate("sysTitle"), message: this.translate("welcome")});
-			}
-			else{
-				this.show_notification({title: this.translate("sysTitle"), message: this.config.welcome_message});
+
+	async showNotification (notification) {
+		const message = await this.renderMessage(notification.templateName || "notification", notification);
+
+		new NotificationFx({
+			message,
+			layout: "growl",
+			effect: this.config.effect,
+			ttl: notification.timer || this.config.display_time
+		}).show();
+	},
+
+	async showAlert (alert, sender) {
+		// If module already has an open alert close it
+		if (this.alerts[sender.name]) {
+			this.hideAlert(sender, false);
+		}
+
+		// Add overlay
+		if (!Object.keys(this.alerts).length) {
+			this.toggleBlur(true);
+		}
+
+		const message = await this.renderMessage(alert.templateName || "alert", alert);
+
+		// Store alert in this.alerts
+		this.alerts[sender.name] = new NotificationFx({
+			message,
+			effect: this.config.alert_effect,
+			ttl: alert.timer,
+			onClose: () => this.hideAlert(sender),
+			al_no: "ns-alert"
+		});
+
+		// Show alert
+		this.alerts[sender.name].show();
+
+		// Add timer to dismiss alert and overlay
+		if (alert.timer) {
+			setTimeout(() => {
+				this.hideAlert(sender);
+			}, alert.timer);
+		}
+	},
+
+	hideAlert (sender, close = true) {
+		// Dismiss alert and remove from this.alerts
+		if (this.alerts[sender.name]) {
+			this.alerts[sender.name].dismiss(close);
+			delete this.alerts[sender.name];
+			// Remove overlay
+			if (!Object.keys(this.alerts).length) {
+				this.toggleBlur(false);
 			}
 		}
-		Log.info("Starting module: " + this.name);
+	},
+
+	renderMessage (type, data) {
+		return new Promise((resolve) => {
+			this.nunjucksEnvironment().render(this.getTemplate(type), data, function (err, res) {
+				if (err) {
+					Log.error("Failed to render alert", err);
+				}
+
+				resolve(res);
+			});
+		});
+	},
+
+	toggleBlur (add = false) {
+		const method = add ? "add" : "remove";
+		const modules = document.querySelectorAll(".module");
+		for (const module of modules) {
+			module.classList[method]("alert-blur");
+		}
 	}
 });

@@ -1,120 +1,122 @@
-var SimpleGit = require("simple-git");
-var simpleGits = [];
-var fs = require("fs");
-var path = require("path");
-var defaultModules = require(__dirname + "/../defaultmodules.js");
-var NodeHelper = require("node_helper");
+const fs = require("node:fs");
+const path = require("node:path");
+const NodeHelper = require("node_helper");
+
+const defaultModules = require(`${global.root_path}/modules/default/defaultmodules`);
+const GitHelper = require("./git_helper");
+const UpdateHelper = require("./update_helper");
+
+const ONE_MINUTE = 60 * 1000;
 
 module.exports = NodeHelper.create({
-
 	config: {},
 
 	updateTimer: null,
 	updateProcessStarted: false,
 
-	start: function () {
+	gitHelper: new GitHelper(),
+	updateHelper: null,
+
+	getModules (modules) {
+		if (this.config.useModulesFromConfig) {
+			return modules;
+		} else {
+			// get modules from modules-directory
+			const moduleDir = path.normalize(`${global.root_path}/modules`);
+			const getDirectories = (source) => {
+				return fs.readdirSync(source, { withFileTypes: true })
+					.filter((dirent) => dirent.isDirectory() && dirent.name !== "default")
+					.map((dirent) => dirent.name);
+			};
+			return getDirectories(moduleDir);
+		}
 	},
 
-	configureModules: function(modules) {
-
-		// Push MagicMirror itself , biggest chance it'll show up last in UI and isn't overwritten
-		// others will be added in front
-		// this method returns promises so we can't wait for every one to resolve before continuing
-		simpleGits.push({"module": "default", "git": SimpleGit(path.normalize(__dirname + "/../../../"))});
-
-		var promises = [];
-
-		for (moduleName in modules) {
+	async configureModules (modules) {
+		for (const moduleName of this.getModules(modules)) {
 			if (!this.ignoreUpdateChecking(moduleName)) {
-				// Default modules are included in the main MagicMirror repo
-				var moduleFolder = path.normalize(__dirname + "/../../" + moduleName);
-
-				try {
-					//console.log("checking git for module="+moduleName)
-					let stat = fs.statSync(path.join(moduleFolder, ".git"));
-					promises.push(this.resolveRemote(moduleName, moduleFolder));
-				} catch(err) {
-					// Error when directory .git doesn't exist
-					// This module is not managed with git, skip
-					continue;
-				}
+				await this.gitHelper.add(moduleName);
 			}
 		}
 
-		return Promise.all(promises);
-	},
-
-	socketNotificationReceived: function (notification, payload) {
-		if (notification === "CONFIG") {
-			this.config = payload;
-		} else if(notification === "MODULES") {
-			// if this is the 1st time thru the update check process
-			if (!this.updateProcessStarted) {
-				this.updateProcessStarted = true;
-				this.configureModules(payload).then(() => this.performFetch());
-			}
+		if (!this.ignoreUpdateChecking("MagicMirror")) {
+			await this.gitHelper.add("MagicMirror");
 		}
 	},
 
-	resolveRemote: function(moduleName, moduleFolder) {
-		return new Promise((resolve, reject) => {
-			var git = SimpleGit(moduleFolder);
-			git.getRemotes(true, (err, remotes) => {
-				if (remotes.length < 1 || remotes[0].name.length < 1) {
-					// No valid remote for folder, skip
-					return resolve();
+	async socketNotificationReceived (notification, payload) {
+		switch (notification) {
+			case "CONFIG":
+				this.config = payload;
+				this.updateHelper = new UpdateHelper(this.config);
+				await this.updateHelper.check_PM2_Process();
+				break;
+			case "MODULES":
+				// if this is the 1st time thru the update check process
+				if (!this.updateProcessStarted) {
+					this.updateProcessStarted = true;
+					await this.configureModules(payload);
+					await this.performFetch();
 				}
-				// Folder has .git and has at least one git remote, watch this folder
-				simpleGits.unshift({"module": moduleName, "git": git});
-				resolve();
-			});
-		});
+				break;
+			case "SCAN_UPDATES":
+				// 1st time of check allows to force new scan
+				if (this.updateProcessStarted) {
+					clearTimeout(this.updateTimer);
+					await this.performFetch();
+				}
+				break;
+		}
 	},
 
-	performFetch: function() {
-		var self = this;
-		simpleGits.forEach((sg) => {
-			sg.git.fetch().status((err, data) => {
-				data.module = sg.module;
-				if (!err) {
-					sg.git.log({"-1": null}, (err, data2) => {
-						if (!err && data2.latest && "hash" in data2.latest) {
-							data.hash = data2.latest.hash;
-							self.sendSocketNotification("STATUS", data);
-						}
-					});
+	async performFetch () {
+		const repos = await this.gitHelper.getRepos();
+
+		for (const repo of repos) {
+			this.sendSocketNotification("REPO_STATUS", repo);
+		}
+
+		const updates = await this.gitHelper.checkUpdates();
+
+		if (this.config.sendUpdatesNotifications && updates.length) {
+			this.sendSocketNotification("UPDATES", updates);
+		}
+
+		if (updates.length) {
+			const updateResult = await this.updateHelper.parse(updates);
+			for (const update of updateResult) {
+				if (update.inProgress) {
+					this.sendSocketNotification("UPDATE_STATUS", update);
 				}
-			});
-		});
+			}
+		}
 
 		this.scheduleNextFetch(this.config.updateInterval);
 	},
 
-	scheduleNextFetch: function(delay) {
-		if (delay < 60 * 1000) {
-			delay = 60 * 1000;
-		}
-
-		var self = this;
+	scheduleNextFetch (delay) {
 		clearTimeout(this.updateTimer);
-		this.updateTimer = setTimeout(function() {
-			self.performFetch();
-		}, delay);
+
+		this.updateTimer = setTimeout(
+			() => {
+				this.performFetch();
+			},
+			Math.max(delay, ONE_MINUTE)
+		);
 	},
 
-	ignoreUpdateChecking: function(moduleName) {
+	ignoreUpdateChecking (moduleName) {
 		// Should not check for updates for default modules
-		if (defaultModules.indexOf(moduleName) >= 0) {
+		if (defaultModules.includes(moduleName)) {
 			return true;
 		}
 
 		// Should not check for updates for ignored modules
-		if (this.config.ignoreModules.indexOf(moduleName) >= 0) {
+		if (this.config.ignoreModules.includes(moduleName)) {
 			return true;
 		}
 
 		// The rest of the modules that passes should check for updates
 		return false;
 	}
-
 });

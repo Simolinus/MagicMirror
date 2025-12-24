@@ -1,116 +1,127 @@
 Module.register("updatenotification", {
-
 	defaults: {
 		updateInterval: 10 * 60 * 1000, // every 10 minutes
 		refreshInterval: 24 * 60 * 60 * 1000, // one day
-		ignoreModules: []
+		ignoreModules: [],
+		sendUpdatesNotifications: false,
+		updates: [],
+		updateTimeout: 2 * 60 * 1000, // max update duration
+		updateAutorestart: false, // autoRestart MM when update done ?
+		useModulesFromConfig: true // if `false` iterate over modules directory
 	},
 
 	suspended: false,
 	moduleList: {},
+	needRestart: false,
+	updates: [],
 
-	start: function () {
-		var self = this;
-		Log.log("Start updatenotification");
-		setInterval( () => { self.moduleList = {};self.updateDom(2); } , self.config.refreshInterval);
+	start () {
+		Log.info(`Starting module: ${this.name}`);
+		this.addFilters();
+		setInterval(() => {
+			this.moduleList = {};
+			this.updateDom(2);
+		}, this.config.refreshInterval);
 	},
 
-	notificationReceived: function (notification, payload, sender) {
-		if (notification === "DOM_OBJECTS_CREATED") {
-			this.sendSocketNotification("CONFIG", this.config);
-			this.sendSocketNotification("MODULES", Module.definitions);
-			//this.hide(0, { lockString: self.identifier });
+	suspend () {
+		this.suspended = true;
+	},
+
+	resume () {
+		this.suspended = false;
+		this.updateDom(2);
+	},
+
+	notificationReceived (notification) {
+		switch (notification) {
+			case "DOM_OBJECTS_CREATED":
+				this.sendSocketNotification("CONFIG", this.config);
+				this.sendSocketNotification("MODULES", Object.keys(Module.definitions));
+				break;
+			case "SCAN_UPDATES":
+				this.sendSocketNotification("SCAN_UPDATES");
+				break;
 		}
 	},
 
-	socketNotificationReceived: function (notification, payload) {
-		if (notification === "STATUS") {
-			this.updateUI(payload);
+	socketNotificationReceived (notification, payload) {
+		switch (notification) {
+			case "REPO_STATUS":
+				this.updateUI(payload);
+				break;
+			case "UPDATES":
+				this.sendNotification("UPDATES", payload);
+				break;
+			case "UPDATE_STATUS":
+				this.updatesNotifier(payload);
+				break;
 		}
 	},
 
-	updateUI: function (payload) {
-		var self = this;
+	getStyles () {
+		return [`${this.name}.css`];
+	},
+
+	getTemplate () {
+		return `${this.name}.njk`;
+	},
+
+	getTemplateData () {
+		return { moduleList: this.moduleList, updatesList: this.updates, suspended: this.suspended, needRestart: this.needRestart };
+	},
+
+	updateUI (payload) {
 		if (payload && payload.behind > 0) {
 			// if we haven't seen info for this module
-			if(this.moduleList[payload.module] == undefined){
+			if (this.moduleList[payload.module] === undefined) {
 				// save it
-				this.moduleList[payload.module]=payload;
-				self.updateDom(2);
+				this.moduleList[payload.module] = payload;
+				this.updateDom(2);
 			}
-			//self.show(1000, { lockString: self.identifier });
-
-		} else if (payload && payload.behind == 0){
+		} else if (payload && payload.behind === 0) {
 			// if the module WAS in the list, but shouldn't be
-			if(this.moduleList[payload.module] != undefined){
+			if (this.moduleList[payload.module] !== undefined) {
 				// remove it
 				delete this.moduleList[payload.module];
-				self.updateDom(2);
+				this.updateDom(2);
 			}
 		}
 	},
 
-	diffLink: function(module, text) {
-		var localRef = module.hash;
-		var remoteRef = module.tracking.replace(/.*\//, "");
-		return "<a href=\"https://github.com/MichMich/MagicMirror/compare/"+localRef+"..."+remoteRef+"\" "+
-			"class=\"xsmall dimmed\" "+
-			"style=\"text-decoration: none;\" "+
-			"target=\"_blank\" >" +
-			text +
-			"</a>";
+	addFilters () {
+		this.nunjucksEnvironment().addFilter("diffLink", (text, status) => {
+			if (status.module !== "MagicMirror") {
+				return text;
+			}
+
+			const localRef = status.hash;
+			const remoteRef = status.tracking.replace(/.*\//, "");
+			return `<a href="https://github.com/MagicMirrorOrg/MagicMirror/compare/${localRef}...${remoteRef}" class="xsmall dimmed difflink" target="_blank">${text}</a>`;
+		});
 	},
 
-	// Override dom generator.
-	getDom: function () {
-		var wrapper = document.createElement("div");
-		if(this.suspended==false){
-			// process the hash of module info found
-			for(key of Object.keys(this.moduleList)){
-				let m= this.moduleList[key];
+	updatesNotifier (payload, done = true) {
+		if (this.updates[payload.name] === undefined) {
+			this.updates[payload.name] = {
+				name: payload.name,
+				done: done
+			};
 
-				var message = document.createElement("div");
-				message.className = "small bright";
-
-				var icon = document.createElement("i");
-				icon.className = "fa fa-exclamation-circle";
-				icon.innerHTML = "&nbsp;";
-				message.appendChild(icon);
-
-				var updateInfoKeyName = m.behind == 1 ? "UPDATE_INFO_SINGLE" : "UPDATE_INFO_MULTIPLE";
-
-				var subtextHtml = this.translate(updateInfoKeyName, {
-					COMMIT_COUNT: m.behind,
-					BRANCH_NAME: m.current
-				});
-
-				var text = document.createElement("span");
-				if (m.module == "default") {
-					text.innerHTML = this.translate("UPDATE_NOTIFICATION");
-					subtextHtml = this.diffLink(m,subtextHtml);
-				} else {
-					text.innerHTML = this.translate("UPDATE_NOTIFICATION_MODULE", {
-						MODULE_NAME: m.module
-					});
+			if (payload.error) {
+				this.sendSocketNotification("UPDATE_ERROR", payload.name);
+				this.updates[payload.name].done = false;
+			} else {
+				if (payload.updated) {
+					delete this.moduleList[payload.name];
+					this.updates[payload.name].done = true;
 				}
-				message.appendChild(text);
-
-				wrapper.appendChild(message);
-
-				var subtext = document.createElement("div");
-				subtext.innerHTML = subtextHtml;
-				subtext.className = "xsmall dimmed";
-				wrapper.appendChild(subtext);
+				if (payload.needRestart) {
+					this.needRestart = true;
+				}
 			}
-		}
-		return wrapper;
-	},
 
-	suspend: function() {
-		this.suspended=true;
-	},
-	resume: function() {
-		this.suspended=false;
-		this.updateDom(2);
+			this.updateDom(2);
+		}
 	}
 });

@@ -1,14 +1,9 @@
 .weather .weathericon,
 .weather .fa-home {
   font-size: 75%;
-  line-height: 65px;
-  display: inline-block;
-  -ms-transform: translate(0, -3px); /* IE 9 */
-  -webkit-transform: translate(0, -3px); /* Safari */
-  transform: translate(0, -3px);
 }
 
-.weather .humidityIcon {
+.weather .humidity-icon {
   padding-right: 4px;
 }
 
@@ -31,13 +26,12 @@
   padding-right: 0;
 }
 
-.weather .precipitation {
+.weather .precipitation-amount,
+.weather .precipitation-prob,
+.weather .humidity-hourly,
+.weather .uv-index {
   padding-left: 20px;
   padding-right: 0;
-}
-
-.weather tr .weathericon {
-  line-height: 25px;
 }
 
 .weather tr.colored .min-temp {
@@ -46,4 +40,10 @@
 
 .weather tr.colored .max-temp {
   color: #ff8e99;
+}
+
+.weather .type-temp {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
 }

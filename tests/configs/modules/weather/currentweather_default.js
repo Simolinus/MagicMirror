@@ -1,22 +1,7 @@
-/* Magic Mirror Test config default weather
- *
- * By fewieden https://github.com/fewieden
- *
- * MIT Licensed.
- */
-
 let config = {
-	port: 8080,
-	ipWhitelist: ["127.0.0.1", "::ffff:127.0.0.1", "::1"],
-
-	language: "en",
+	address: "0.0.0.0",
+	ipWhitelist: [],
 	timeFormat: 12,
-	units: "metric",
-	electronOptions: {
-		webPreferences: {
-			nodeIntegration: true,
-		},
-	},
 
 	modules: [
 		{
@@ -24,12 +9,16 @@ let config = {
 			position: "bottom_bar",
 			config: {
 				location: "Munich",
-				apiKey: "fake key",
-				initialLoadDelay: 3000
+				showHumidity: "feelslike",
+				weatherProvider: "openweathermap",
+				weatherEndpoint: "/weather",
+				mockData: '"#####WEATHERDATA#####"'
 			}
 		}
 	]
 };
 
 /*************** DO NOT EDIT THE LINE BELOW ***************/
-if (typeof module !== "undefined") {module.exports = config;}
+if (typeof module !== "undefined") {
+	module.exports = config;
+}

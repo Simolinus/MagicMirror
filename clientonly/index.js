@@ -2,15 +2,23 @@
 
 // Use separate scope to prevent global scope pollution
 (function () {
-	var config = {};
+	const config = {};
 
-	// Helper function to get server address/hostname from either the commandline or env
-	function getServerAddress() {
-		// Helper function to get command line parameters
-		// Assumes that a cmdline parameter is defined with `--key [value]`
-		function getCommandLineParameter(key, defaultValue = undefined) {
-			var index = process.argv.indexOf(`--${key}`);
-			var value = index > -1 ? process.argv[index + 1] : undefined;
+	/**
+	 * Helper function to get server address/hostname from either the commandline or env
+	 */
+	function getServerAddress () {
+
+		/**
+		 * Get command line parameters
+		 * Assumes that a cmdline parameter is defined with `--key [value]`
+		 * @param {string} key key to look for at the command line
+		 * @param {string} defaultValue value if no key is given at the command line
+		 * @returns {string} the value of the parameter
+		 */
+		function getCommandLineParameter (key, defaultValue = undefined) {
+			const index = process.argv.indexOf(`--${key}`);
+			const value = index > -1 ? process.argv[index + 1] : undefined;
 			return value !== undefined ? String(value) : defaultValue;
 		}
 
@@ -18,37 +26,50 @@
 		["address", "port"].forEach((key) => {
 			config[key] = getCommandLineParameter(key, process.env[key.toUpperCase()]);
 		});
+
+		// determine if "--use-tls"-flag was provided
+		config.tls = process.argv.indexOf("--use-tls") > 0;
 	}
 
-	function getServerConfig(url) {
+	/**
+	 * Gets the config from the specified server url
+	 * @param {string} url location where the server is running.
+	 * @returns {Promise} the config
+	 */
+	function getServerConfig (url) {
 		// Return new pending promise
 		return new Promise((resolve, reject) => {
-			// Select http or https module, depending on reqested url
-			const lib = url.startsWith("https") ? require("https") : require("http");
+			// Select http or https module, depending on requested url
+			const lib = url.startsWith("https") ? require("node:https") : require("node:http");
 			const request = lib.get(url, (response) => {
-				var configData = "";
+				let configData = "";
 
 				// Gather incoming data
-				response.on("data", function(chunk) {
+				response.on("data", function (chunk) {
 					configData += chunk;
 				});
 				// Resolve promise at the end of the HTTP/HTTPS stream
-				response.on("end", function() {
+				response.on("end", function () {
 					resolve(JSON.parse(configData));
 				});
 			});
 
-			request.on("error", function(error) {
+			request.on("error", function (error) {
 				reject(new Error(`Unable to read config from server (${url} (${error.message}`));
 			});
 		});
 	}
 
-	function fail(message, code = 1) {
+	/**
+	 * Print a message to the console in case of errors
+	 * @param {string} message error message to print
+	 * @param {number} code error code for the exit call
+	 */
+	function fail (message, code = 1) {
 		if (message !== undefined && typeof message === "string") {
 			console.log(message);
 		} else {
-			console.log("Usage: 'node clientonly --address 192.168.1.10 --port 8080'");
+			console.log("Usage: 'node clientonly --address 192.168.1.10 --port 8080 [--use-tls]'");
 		}
 		process.exit(code);
 	}
@@ -56,21 +77,35 @@
 	getServerAddress();
 
 	(config.address && config.port) || fail();
+	const prefix = config.tls ? "https://" : "http://";
 
 	// Only start the client if a non-local server was provided
 	if (["localhost", "127.0.0.1", "::1", "::ffff:127.0.0.1", undefined].indexOf(config.address) === -1) {
-		getServerConfig(`http://${config.address}:${config.port}/config/`)
+		getServerConfig(`${prefix}${config.address}:${config.port}/config/`)
 			.then(function (configReturn) {
+				// check environment for DISPLAY or WAYLAND_DISPLAY
+				const elecParams = ["js/electron.js"];
+				if (process.env.WAYLAND_DISPLAY) {
+					console.log(`Client: Using WAYLAND_DISPLAY=${process.env.WAYLAND_DISPLAY}`);
+					elecParams.push("--enable-features=UseOzonePlatform");
+					elecParams.push("--ozone-platform=wayland");
+				} else if (process.env.DISPLAY) {
+					console.log(`Client: Using DISPLAY=${process.env.DISPLAY}`);
+				} else {
+					fail("Error: Requires environment variable WAYLAND_DISPLAY or DISPLAY, none is provided.");
+				}
 				// Pass along the server config via an environment variable
-				var env = Object.create(process.env);
-				var options = { env: env };
+				const env = Object.create(process.env);
+				env.clientonly = true; // set to pass to electron.js
+				const options = { env: env };
 				configReturn.address = config.address;
 				configReturn.port = config.port;
+				configReturn.tls = config.tls;
 				env.config = JSON.stringify(configReturn);
 
 				// Spawn electron application
 				const electron = require("electron");
-				const child = require("child_process").spawn(electron, ["js/electron.js"], options);
+				const child = require("node:child_process").spawn(electron, elecParams, options);
 
 				// Pipe all child process output to current stdout
 				child.stdout.on("data", function (buf) {
@@ -91,7 +126,6 @@
 						console.log(`There something wrong. The clientonly is not running code ${code}`);
 					}
 				});
-
 			})
 			.catch(function (reason) {
 				fail(`Unable to connect to server: (${reason})`);

@@ -1,237 +1,251 @@
-/* global config, vendor, MM, Log, Module */
-/* Magic Mirror
- * Module and File loaders.
- *
- * By Michael Teeuw http://michaelteeuw.nl
- * MIT Licensed.
- */
+/* global defaultModules, vendor */
 
-var Loader = (function() {
+const Loader = (function () {
 
 	/* Create helper variables */
 
-	var loadedModuleFiles = [];
-	var loadedFiles = [];
-	var moduleObjects = [];
+	const loadedModuleFiles = [];
+	const loadedFiles = [];
+	const moduleObjects = [];
 
 	/* Private Methods */
 
-	/* loadModules()
-	 * Loops thru all modules and requests load for every module.
+	/**
+	 * Retrieve object of env variables.
+	 * @returns {object} with key: values as assembled in js/server_functions.js
 	 */
-	var loadModules = function() {
-
-		var moduleData = getModuleData();
-
-		var loadNextModule = function() {
-			if (moduleData.length > 0) {
-				var nextModule = moduleData[0];
-				loadModule(nextModule, function() {
-					moduleData = moduleData.slice(1);
-					loadNextModule();
-				});
-			} else {
-				// All modules loaded. Load custom.css
-				// This is done after all the modules so we can
-				// overwrite all the defined styles.
-
-				loadFile(config.customCss, function() {
-					// custom.css loaded. Start all modules.
-					startModules();
-				});
-
-			}
-		};
-
-		loadNextModule();
+	const getEnvVars = async function () {
+		const res = await fetch(`${location.protocol}//${location.host}${config.basePath}env`);
+		return JSON.parse(await res.text());
 	};
 
-	/* startModules()
-	 * Loops thru all modules and requests start for every module.
+	/**
+	 * Loops through all modules and requests start for every module.
 	 */
-	var startModules = function() {
-		for (var m in moduleObjects) {
-			var module = moduleObjects[m];
-			module.start();
+	const startModules = async function () {
+		const modulePromises = [];
+		for (const module of moduleObjects) {
+			try {
+				modulePromises.push(module.start());
+			} catch (error) {
+				Log.error(`Error when starting node_helper for module ${module.name}:`);
+				Log.error(error);
+			}
 		}
+
+		const results = await Promise.allSettled(modulePromises);
+
+		// Log errors that happened during async node_helper startup
+		results.forEach((result) => {
+			if (result.status === "rejected") {
+				Log.error(result.reason);
+			}
+		});
 
 		// Notify core of loaded modules.
 		MM.modulesStarted(moduleObjects);
+
+		// Starting modules also hides any modules that have requested to be initially hidden
+		for (const thisModule of moduleObjects) {
+			if (thisModule.data.hiddenOnStartup) {
+				Log.info(`Initially hiding ${thisModule.name}`);
+				thisModule.hide();
+			}
+		}
 	};
 
-	/* getAllModules()
+	/**
 	 * Retrieve list of all modules.
-	 *
-	 * return array - module data as configured in config
+	 * @returns {object[]} module data as configured in config
 	 */
-	var getAllModules = function() {
-		return config.modules;
+	const getAllModules = function () {
+		const AllModules = config.modules.filter((module) => (module.module !== undefined) && (MM.getAvailableModulePositions.indexOf(module.position) > -1 || typeof (module.position) === "undefined"));
+		return AllModules;
 	};
 
-	/* getModuleData()
+	/**
 	 * Generate array with module information including module paths.
-	 *
-	 * return array - Module information.
+	 * @returns {object[]} Module information.
 	 */
-	var getModuleData = function() {
-		var modules = getAllModules();
-		var moduleFiles = [];
+	const getModuleData = async function () {
+		const modules = getAllModules();
+		const moduleFiles = [];
+		const envVars = await getEnvVars();
 
-		for (var m in modules) {
-			var moduleData = modules[m];
-			var module = moduleData.module;
+		modules.forEach(function (moduleData, index) {
+			const module = moduleData.module;
 
-			var elements = module.split("/");
-			var moduleName = elements[elements.length - 1];
-			var moduleFolder = config.paths.modules + "/" + module;
+			const elements = module.split("/");
+			const moduleName = elements[elements.length - 1];
+			let moduleFolder = `${envVars.modulesDir}/${module}`;
 
 			if (defaultModules.indexOf(moduleName) !== -1) {
-				moduleFolder = config.paths.modules + "/default/" + module;
+				const defaultModuleFolder = `modules/default/${module}`;
+				if (window.name !== "jsdom") {
+					moduleFolder = defaultModuleFolder;
+				} else {
+					// running in Jest, allow defaultModules placed under moduleDir for testing
+					if (envVars.modulesDir === "modules") {
+						moduleFolder = defaultModuleFolder;
+					}
+				}
 			}
 
 			if (moduleData.disabled === true) {
-				continue;
+				return;
 			}
 
 			moduleFiles.push({
-				index: m,
-				identifier: "module_" + m + "_" + module,
+				index: index,
+				identifier: `module_${index}_${module}`,
 				name: moduleName,
-				path: moduleFolder + "/" ,
-				file: moduleName + ".js",
+				path: `${moduleFolder}/`,
+				file: `${moduleName}.js`,
 				position: moduleData.position,
+				animateIn: moduleData.animateIn,
+				animateOut: moduleData.animateOut,
+				hiddenOnStartup: moduleData.hiddenOnStartup,
 				header: moduleData.header,
+				configDeepMerge: typeof moduleData.configDeepMerge === "boolean" ? moduleData.configDeepMerge : false,
 				config: moduleData.config,
-				classes: (typeof moduleData.classes !== "undefined") ? moduleData.classes + " " + module : module
+				classes: typeof moduleData.classes !== "undefined" ? `${moduleData.classes} ${module}` : module,
+				order: (typeof moduleData.order === "number" && Number.isInteger(moduleData.order)) ? moduleData.order : 0
 			});
-		}
+		});
 
 		return moduleFiles;
 	};
 
-	/* loadModule(module)
+	/**
 	 * Load modules via ajax request and create module objects.
-	 *
-	 * argument callback function - Function called when done.
-	 * argument module object - Information about the module we want to load.
+	 * @param {object} module Information about the module we want to load.
+	 * @returns {Promise<void>} resolved when module is loaded
 	 */
-	var loadModule = function(module, callback) {
-		var url = module.path + "/" + module.file;
+	const loadModule = async function (module) {
+		const url = module.path + module.file;
 
-		var afterLoad = function() {
-			var moduleObject = Module.create(module.name);
+		/**
+		 * @returns {Promise<void>}
+		 */
+		const afterLoad = async function () {
+			const moduleObject = Module.create(module.name);
 			if (moduleObject) {
-				bootstrapModule(module, moduleObject, function() {
-					callback();
-				});
-			} else {
-				callback();
+				await bootstrapModule(module, moduleObject);
 			}
 		};
 
 		if (loadedModuleFiles.indexOf(url) !== -1) {
-			afterLoad();
+			await afterLoad();
 		} else {
-			loadFile(url, function() {
-				loadedModuleFiles.push(url);
-				afterLoad();
-			});
+			await loadFile(url);
+			loadedModuleFiles.push(url);
+			await afterLoad();
 		}
 	};
 
-	/* bootstrapModule(module, mObj)
+	/**
 	 * Bootstrap modules by setting the module data and loading the scripts & styles.
-	 *
-	 * argument module object - Information about the module we want to load.
-	 * argument mObj object - Modules instance.
-	 * argument callback function - Function called when done.
+	 * @param {object} module Information about the module we want to load.
+	 * @param {Module} mObj Modules instance.
 	 */
-	var bootstrapModule = function(module, mObj, callback) {
-		Log.info("Bootstrapping module: " + module.name);
-
+	const bootstrapModule = async function (module, mObj) {
+		Log.info(`Bootstrapping module: ${module.name}`);
 		mObj.setData(module);
 
-		mObj.loadScripts(function() {
-			Log.log("Scripts loaded for: " + module.name);
-			mObj.loadStyles(function() {
-				Log.log("Styles loaded for: " + module.name);
-				mObj.loadTranslations(function() {
-					Log.log("Translations loaded for: " + module.name);
-					moduleObjects.push(mObj);
-					callback();
-				});
-			});
-		});
+		await mObj.loadScripts();
+		Log.log(`Scripts loaded for: ${module.name}`);
+
+		await mObj.loadStyles();
+		Log.log(`Styles loaded for: ${module.name}`);
+
+		await mObj.loadTranslations();
+		Log.log(`Translations loaded for: ${module.name}`);
+
+		moduleObjects.push(mObj);
 	};
 
-	/* loadFile(fileName)
+	/**
 	 * Load a script or stylesheet by adding it to the dom.
-	 *
-	 * argument fileName string - Path of the file we want to load.
-	 * argument callback function - Function called when done.
+	 * @param {string} fileName Path of the file we want to load.
+	 * @returns {Promise} resolved when the file is loaded
 	 */
-	var loadFile = function(fileName, callback) {
-
-		var extension = fileName.slice((Math.max(0, fileName.lastIndexOf(".")) || Infinity) + 1);
+	const loadFile = async function (fileName) {
+		const extension = fileName.slice((Math.max(0, fileName.lastIndexOf(".")) || Infinity) + 1);
+		let script, stylesheet;
 
 		switch (extension.toLowerCase()) {
-		case "js":
-			Log.log("Load script: " + fileName);
-			var script = document.createElement("script");
-			script.type = "text/javascript";
-			script.src = fileName;
-			script.onload = function() {
-				if (typeof callback === "function") {callback();}
-			};
-			script.onerror = function() {
-				console.error("Error on loading script:", fileName);
-				if (typeof callback === "function") {callback();}
-			};
+			case "js":
+				return new Promise((resolve) => {
+					Log.log(`Load script: ${fileName}`);
+					script = document.createElement("script");
+					script.type = "text/javascript";
+					script.src = fileName;
+					script.onload = function () {
+						resolve();
+					};
+					script.onerror = function () {
+						Log.error("Error on loading script:", fileName);
+						script.remove();
+						resolve();
+					};
+					document.getElementsByTagName("body")[0].appendChild(script);
+				});
+			case "css":
+				return new Promise((resolve) => {
+					Log.log(`Load stylesheet: ${fileName}`);
 
-			document.getElementsByTagName("body")[0].appendChild(script);
-			break;
-		case "css":
-			Log.log("Load stylesheet: " + fileName);
-			var stylesheet = document.createElement("link");
-			stylesheet.rel = "stylesheet";
-			stylesheet.type = "text/css";
-			stylesheet.href = fileName;
-			stylesheet.onload = function() {
-				if (typeof callback === "function") {callback();}
-			};
-			stylesheet.onerror = function() {
-				console.error("Error on loading stylesheet:", fileName);
-				if (typeof callback === "function") {callback();}
-			};
-
-			document.getElementsByTagName("head")[0].appendChild(stylesheet);
-			break;
+					stylesheet = document.createElement("link");
+					stylesheet.rel = "stylesheet";
+					stylesheet.type = "text/css";
+					stylesheet.href = fileName;
+					stylesheet.onload = function () {
+						resolve();
+					};
+					stylesheet.onerror = function () {
+						Log.error("Error on loading stylesheet:", fileName);
+						stylesheet.remove();
+						resolve();
+					};
+					document.getElementsByTagName("head")[0].appendChild(stylesheet);
+				});
 		}
 	};
 
 	/* Public Methods */
 	return {
 
-		/* loadModules()
+		/**
 		 * Load all modules as defined in the config.
 		 */
-		loadModules: function() {
-			loadModules();
+		async loadModules () {
+			const moduleData = await getModuleData();
+			const envVars = await getEnvVars();
+			const customCss = envVars.customCss;
+
+			// Load all modules
+			for (const module of moduleData) {
+				await loadModule(module);
+			}
+
+			// Load custom.css
+			// Since this happens after loading the modules,
+			// it overwrites the default styles.
+			await loadFile(customCss);
+
+			// Start all modules.
+			await startModules();
 		},
 
-		/* loadFile()
+		/**
 		 * Load a file (script or stylesheet).
 		 * Prevent double loading and search for files in the vendor folder.
-		 *
-		 * argument fileName string - Path of the file we want to load.
-		 * argument module Module Object - the module that calls the loadFile function.
-		 * argument callback function - Function called when done.
+		 * @param {string} fileName Path of the file we want to load.
+		 * @param {Module} module The module that calls the loadFile function.
+		 * @returns {Promise} resolved when the file is loaded
 		 */
-		loadFile: function(fileName, module, callback) {
-
+		async loadFileForModule (fileName, module) {
 			if (loadedFiles.indexOf(fileName.toLowerCase()) !== -1) {
-				Log.log("File already loaded: " + fileName);
-				callback();
+				Log.log(`File already loaded: ${fileName}`);
 				return;
 			}
 
@@ -239,22 +253,20 @@ var Loader = (function() {
 				// This is an absolute or relative path.
 				// Load it and then return.
 				loadedFiles.push(fileName.toLowerCase());
-				loadFile(fileName, callback);
-				return;
+				return loadFile(fileName);
 			}
 
 			if (vendor[fileName] !== undefined) {
 				// This file is available in the vendor folder.
 				// Load it from this vendor folder.
 				loadedFiles.push(fileName.toLowerCase());
-				loadFile(config.paths.vendor + "/" + vendor[fileName], callback);
-				return;
+				return loadFile(`${vendor[fileName]}`);
 			}
 
 			// File not loaded yet.
 			// Load it based on the module path.
 			loadedFiles.push(fileName.toLowerCase());
-			loadFile(module.file(fileName), callback);
+			return loadFile(module.file(fileName));
 		}
 	};
-})();
+}());

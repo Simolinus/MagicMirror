@@ -1,6 +1,8 @@
-var app = require("../js/app.js");
-app.start(function(config) {
-	var bindAddress = config.address ? config.address : "localhost";
-	var httpType = config.useHttps ? "https" : "http";
-	console.log("\nReady to go! Please point your browser to: " + httpType + "://" + bindAddress + ":" + config.port);
+const app = require("../js/app");
+const Log = require("../js/logger");
+
+app.start().then((config) => {
+	const bindAddress = config.address ? config.address : "localhost";
+	const httpType = config.useHttps ? "https" : "http";
+	Log.info(`\n>>>   Ready to go! Please point your browser to: ${httpType}://${bindAddress}:${global.mmPort || config.port}   <<<`);
 });
